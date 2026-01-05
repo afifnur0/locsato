@@ -7,6 +7,7 @@ import 'config.dart';
 import 'shop_screen.dart';      
 import 'profile_screen.dart';   
 import 'consultation_screen.dart'; 
+import 'pet_care_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -380,7 +381,8 @@ class _HomeContentState extends State<HomeContent> {
                         _buildServiceCard(Icons.shopping_bag_outlined, "Pet Shop", "Belanja makanan & vitamin.", () {
                            Navigator.push(context, MaterialPageRoute(builder: (_) => const ShopScreen()));
                         }),
-                        _buildServiceCard(Icons.menu_book_outlined, "Pet Care", "Artikel & tips merawat.", () {}),
+                        _buildServiceCard(Icons.menu_book_outlined, "Pet Care", "Artikel & tips merawat.", () {
+                           Navigator.push(context, MaterialPageRoute(builder: (_) => const PetCareScreen()));}),
                       ],
                     ),
                   ],
