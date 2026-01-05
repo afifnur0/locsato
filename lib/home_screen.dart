@@ -1,6 +1,7 @@
 // lib/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart'; // WAJIB ADA
 import 'dart:convert';
 import 'models.dart'; 
 import 'config.dart';
@@ -8,7 +9,6 @@ import 'shop_screen.dart';      // Halaman Belanja
 import 'profile_screen.dart';   // Halaman Profile
 import 'consultation_screen.dart'; // Halaman Konsultasi
 
-// Kita ubah jadi StatefulWidget agar bisa pindah-pindah halaman
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -19,18 +19,54 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   // 1. INDEX HALAMAN AKTIF
   int _selectedIndex = 0;
+  
+  // Variabel untuk menyimpan data user yang login
+  Map<String, dynamic>? _userData;
 
-  // 2. DAFTAR HALAMAN UTAMA (Menu Bawah)
+  // 2. DAFTAR HALAMAN UTAMA
   late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
+    _loadCurrentUser(); // <--- Load data user saat aplikasi dibuka
     _pages = [
-      const HomeContent(),  // Konten Home (Widget terpisah di bawah)
-      const ShopScreen(),   // Halaman Belanja
-      const ProfileScreen(), // Halaman Profil
+      const HomeContent(),  
+      const ShopScreen(),   
+      const ProfileScreen(), 
     ];
+  }
+
+  // --- FUNGSI AMBIL DATA USER DARI PENYIMPANAN LOKAL ---
+  Future<void> _loadCurrentUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Ambil string JSON yang disimpan saat Login
+    final String? userString = prefs.getString('user_data'); 
+    
+    if (userString != null) {
+      setState(() {
+        _userData = jsonDecode(userString);
+      });
+    }
+  }
+
+  // Helper untuk URL Foto Profil User
+  String _getUserPhotoUrl() {
+    // Cek apakah data user ada
+    if (_userData == null) return "";
+    
+    // --- SESUAIKAN DENGAN DATABASE ('profile_pic') ---
+    if (_userData!['profile_pic'] == null) return "";
+    
+    String rawPath = _userData!['profile_pic'];
+    
+    // Bersihkan path jika ada 'public/' (bawaan Laravel)
+    String cleanPath = rawPath.replaceAll('public/', '');
+    
+    // Gabungkan dengan Base URL
+    // Hasil: http://127.0.0.1:8000/storage/profile_photos/xxx.jpg
+    return '${AppConfig.baseUrl}/storage/$cleanPath';
   }
 
   // 3. FUNGSI GANTI HALAMAN
@@ -38,11 +74,20 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _selectedIndex = index;
     });
+    
+    // Jika kembali ke Home atau Profil, refresh data user untuk memastikan foto terupdate
+    if (index == 0 || index == 2) {
+      _loadCurrentUser();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     const primaryColor = Color(0xFF0F766E);
+    
+    // Ambil URL foto
+    String photoUrl = _getUserPhotoUrl();
+    bool hasPhoto = photoUrl.isNotEmpty;
 
     return Scaffold(
       // --- APP BAR DINAMIS (Hanya muncul di Home) ---
@@ -68,21 +113,39 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.only(right: 16.0),
                 child: GestureDetector(
                   onTap: () => _onItemTapped(2), // Klik Foto -> Pindah ke tab Profil
-                  child: const CircleAvatar(
-                    radius: 18,
-                    backgroundColor: Color(0xFF3C8085),
-                    child: Icon(Icons.person, color: Colors.white, size: 20),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF3C8085),
+                      border: Border.all(color: Colors.white, width: 1),
+                    ),
+                    // Menggunakan ClipOval + Image.network agar lebih stabil di Web
+                    child: ClipOval(
+                      child: hasPhoto
+                          ? Image.network(
+                              photoUrl,
+                              fit: BoxFit.cover,
+                              // Error Builder: Jika gambar gagal load (404/CORS), tampilkan Icon
+                              errorBuilder: (context, error, stackTrace) {
+                                print("Gagal memuat foto profil: $error");
+                                return const Icon(Icons.person, color: Colors.white, size: 20);
+                              },
+                            )
+                          : const Icon(Icons.person, color: Colors.white, size: 20),
+                    ),
                   ),
                 ),
               ),
             ],
           )
-        : null, // Halaman Shop & Profile punya AppBar sendiri
+        : null, 
 
       // --- BODY UTAMA ---
       body: _pages[_selectedIndex],
 
-      // --- MENU BAWAH (BOTTOM NAVIGATION) ---
+      // --- MENU BAWAH ---
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, -5))],
@@ -92,8 +155,8 @@ class _HomeScreenState extends State<HomeScreen> {
           selectedItemColor: primaryColor,
           unselectedItemColor: Colors.grey,
           showUnselectedLabels: true,
-          currentIndex: _selectedIndex, // Menandai menu aktif
-          onTap: _onItemTapped,         // Mengubah halaman saat diklik
+          currentIndex: _selectedIndex, 
+          onTap: _onItemTapped,        
           type: BottomNavigationBarType.fixed,
           items: const [
             BottomNavigationBarItem(
@@ -119,7 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ==========================================
-// KONTEN BERANDA (Dipisah agar rapi & Punya State sendiri untuk Load API)
+// KONTEN BERANDA
 // ==========================================
 class HomeContent extends StatefulWidget {
   const HomeContent({super.key});
@@ -138,7 +201,7 @@ class _HomeContentState extends State<HomeContent> {
     _fetchDoctors();
   }
 
-  // --- AMBIL DATA DOKTER DARI API (BUKAN DUMMY) ---
+  // --- AMBIL DATA DOKTER DARI API ---
   Future<void> _fetchDoctors() async {
     try {
       final url = Uri.parse('${AppConfig.baseUrl}/api/doctors');
@@ -148,14 +211,15 @@ class _HomeContentState extends State<HomeContent> {
         final data = jsonDecode(response.body);
         final List<dynamic> doctorsJson = data['data'];
         
-        setState(() {
-          // Ambil maksimal 5 dokter untuk ditampilkan di Home
-          _availableDoctors = doctorsJson.map((json) => DoctorModel.fromJson(json)).toList();
-          if (_availableDoctors.length > 5) {
-            _availableDoctors = _availableDoctors.sublist(0, 5);
-          }
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _availableDoctors = doctorsJson.map((json) => DoctorModel.fromJson(json)).toList();
+            if (_availableDoctors.length > 5) {
+              _availableDoctors = _availableDoctors.sublist(0, 5);
+            }
+            _isLoading = false;
+          });
+        }
       } else {
         throw Exception("Gagal load dokter");
       }
@@ -165,7 +229,7 @@ class _HomeContentState extends State<HomeContent> {
     }
   }
 
-  // Helper untuk membersihkan URL Gambar
+  // Helper untuk membersihkan URL Gambar DOKTER
   String _getDoctorImageUrl(String? fotoPath, String namaDokter) {
     if (fotoPath == null || fotoPath.isEmpty) {
       return 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(namaDokter)}&background=random&color=fff';
@@ -176,16 +240,6 @@ class _HomeContentState extends State<HomeContent> {
 
   @override
   Widget build(BuildContext context) {
-    // Akses context Home Screen untuk pindah tab
-    void navigateToShop() {
-      final homeState = context.findAncestorStateOfType<State<HomeScreen>>();
-      // Panggil method _onItemTapped via reflection (agak tricky) atau
-      // cara paling aman: kita biarkan navigation bar yang handle,
-      // tapi untuk simplisitas di sini kita push halaman baru atau biarkan user klik manual.
-      // NOTE: Context ancestor ini agak kompleks di Flutter jika class _HomeScreenState private.
-      // Solusi simpel: Kita asumsikan user klik navbar bawah untuk belanja.
-    }
-
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -227,7 +281,6 @@ class _HomeContentState extends State<HomeContent> {
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                     ),
                     onPressed: () {
-                      // Navigasi ke Halaman Konsultasi
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const ConsultationScreen()));
                     }, 
                     child: const Text("Mulai Konsultasi"),
@@ -237,7 +290,7 @@ class _HomeContentState extends State<HomeContent> {
             ),
           ),
 
-          // 2. LAYANAN KAMI (MENU GRID)
+          // 2. LAYANAN KAMI
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: const Text("Layanan Kami", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
@@ -260,14 +313,11 @@ class _HomeContentState extends State<HomeContent> {
                 ),
                 _buildServiceItem(icon: Icons.pets, label: "PetCare", color: Colors.orange, onTap: (){}),
                 _buildServiceItem(icon: Icons.medical_services_outlined, label: "HomVisit", color: Colors.blue, onTap: (){}),
-                
-                // TOMBOL PET MEDIC
                 _buildServiceItem(
                   icon: Icons.shopping_bag_outlined, 
                   label: "PetMedic", 
                   color: Colors.redAccent, 
                   onTap: () {
-                    // Navigasi manual ke ShopScreen jika state management kompleks
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const ShopScreen()));
                   }
                 ),
@@ -277,7 +327,7 @@ class _HomeContentState extends State<HomeContent> {
 
           const SizedBox(height: 24),
 
-          // 3. DOKTER TERSEDIA (DATA ASLI DARI API)
+          // 3. DOKTER TERSEDIA
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Row(
@@ -294,7 +344,6 @@ class _HomeContentState extends State<HomeContent> {
             ),
           ),
           
-          // LIST VIEW DOKTER (Dynamic)
           _isLoading 
             ? const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator())) 
             : _availableDoctors.isEmpty 
@@ -319,7 +368,6 @@ class _HomeContentState extends State<HomeContent> {
                           padding: const EdgeInsets.all(12.0),
                           child: Row(
                             children: [
-                              // Foto Dokter
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(12),
                                 child: Image.network(
@@ -329,7 +377,6 @@ class _HomeContentState extends State<HomeContent> {
                                 ),
                               ),
                               const SizedBox(width: 16),
-                              // Info Dokter
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,7 +387,6 @@ class _HomeContentState extends State<HomeContent> {
                                     const SizedBox(height: 8),
                                     Row(
                                       children: [
-                                        // Status Online/Offline
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                           decoration: BoxDecoration(

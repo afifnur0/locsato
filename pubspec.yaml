@@ -12,6 +12,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  image_picker: ^1.0.4
   
   # --- PENTING: Perhatikan spasi di bawah ini lurus vertikal ---
   http: ^1.1.0

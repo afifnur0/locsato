@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'home_screen.dart'; 
 import 'register_screen.dart'; 
-import 'config.dart'; // <--- 1. WAJIB IMPORT FILE CONFIG.DART
+import 'config.dart'; 
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,18 +19,13 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
 
-  // --- HAPUS CONFIG MANUAL DISINI ---
-  // Kita tidak lagi menulis IP manual di setiap file.
-  // Semua mengambil dari config.dart
-
   Future<void> _login() async {
     setState(() {
       _isLoading = true; 
     });
 
     try {
-      // 2. GUNAKAN BASE URL DARI CONFIG
-      // Ini menjamin IP Address sama persis dengan halaman Checkout
+      // Menggunakan Base URL dari config
       final url = Uri.parse('${AppConfig.baseUrl}/api/login');
 
       final response = await http.post(
@@ -44,28 +39,39 @@ class _LoginScreenState extends State<LoginScreen> {
 
       print("Connecting to: $url");
       print("Response Status: ${response.statusCode}");
-      print("Response Body: ${response.body}");
-
+      
+      // Decode JSON Response
       final data = jsonDecode(response.body);
 
+      // Cek Status Login
+      // Kita asumsikan sukses jika statusCode 200 DAN status di body 'success'
       if (response.statusCode == 200 && data['status'] == 'success') {
-        // --- LOGIN SUKSES ---
+        
+        // --- PERBAIKAN DI SINI ---
+        // 1. Ambil Data User Lengkap & Token
+        final userData = data['data']['user']; // Ini berisi: id, nama, email, profile_pic, dll
+        final token = data['data']['token'];
+
         final prefs = await SharedPreferences.getInstance();
         
-        // 3. SIMPAN TOKEN
-        // Token ini sekarang valid untuk IP yang ada di config.dart
-        await prefs.setString('token', data['data']['token']);
+        // 2. Simpan Token
+        await prefs.setString('token', token);
         
-        // 4. Simpan Data User
-        await prefs.setString('user_name', data['data']['user']['nama']);
-        await prefs.setString('user_email', data['data']['user']['email']); 
+        // 3. SIMPAN SELURUH DATA USER KE JSON STRING
+        // Ini kuncinya! Kita simpan object user agar kolom 'profile_pic' ikut tersimpan.
+        // Nanti Home Screen akan membaca key 'user_data' ini.
+        await prefs.setString('user_data', jsonEncode(userData));
+        
+        // (Opsional) Jika kamu butuh simpan nama/email terpisah untuk fitur lain, boleh tetap ada:
+        await prefs.setString('user_name', userData['nama']);
+        await prefs.setString('user_email', userData['email']); 
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Login Berhasil!"), backgroundColor: Colors.green),
           );
           
-          // Pindah ke Home (Hapus riwayat login agar tidak bisa back)
+          // Pindah ke Home (Replacement agar tidak bisa back ke login)
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const HomeScreen()),
@@ -86,7 +92,6 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            // Tampilkan pesan error yang jelas (mengambil URL dari config)
             content: Text("Gagal terhubung ke ${AppConfig.baseUrl}.\nError: $e"),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 4),

@@ -6,7 +6,7 @@ class AppConfig {
   // GANTI BAGIAN INI DENGAN IP LAPTOP KAMU YANG SEKARANG
   // Cara cek IP: Buka CMD -> ketik 'ipconfig' -> Cari IPv4 Address
   // -------------------------------------------------------------
-  static const String _ipLaptop = "192.168.1.157"; 
+  static const String _ipLaptop = "192.168.1.12"; 
   
   // Logika otomatis: Kalau Web pakai localhost, kalau HP pakai IP Laptop
   static String get baseUrl {

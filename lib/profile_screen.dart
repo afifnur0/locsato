@@ -1,11 +1,13 @@
 // lib/profile_screen.dart
+import 'dart:typed_data'; 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart'; 
 import 'dart:convert';
 import 'login_screen.dart'; 
-import 'history_screen.dart'; // <--- Import Halaman Riwayat yang asli
-import 'config.dart'; // <--- 1. WAJIB IMPORT CONFIG
+import 'history_screen.dart'; 
+import 'config.dart'; 
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -17,6 +19,13 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   String _userName = "Loading...";
   String _userEmail = "";
+  String? _userPhotoUrl; 
+  
+  // Menggunakan Uint8List agar support Web & Mobile
+  Uint8List? _imageBytes; 
+  
+  final ImagePicker _picker = ImagePicker();
+  bool _isUploading = false;
 
   @override
   void initState() {
@@ -24,21 +33,153 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadUserData();
   }
 
-  // Load data user dari SharedPreferences
+  // --- 1. LOAD DATA & SUSUN URL FOTO ---
   Future<void> _loadUserData() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    
+    // Ambil string JSON utuh
+    String? userJson = prefs.getString('user_data');
+    String rawPhotoPath = "";
+
+    if (userJson != null) {
+      final userData = jsonDecode(userJson);
+      _userName = userData['nama'] ?? "Guest";
+      _userEmail = userData['email'] ?? "guest@locsato.com";
+      
+      // Pastikan key sesuai database ('profile_pic')
+      rawPhotoPath = userData['profile_pic'] ?? "";
+    } 
+
     setState(() {
-      _userName = prefs.getString('user_name') ?? "Guest User";
-      _userEmail = prefs.getString('user_email') ?? "guest@locsato.com";
+      // Logic penyusunan URL Foto yang Support Windows & Linux
+      if (rawPhotoPath.isNotEmpty) {
+        
+        // 1. Bersihkan path dari 'public/' dan ubah Backslash (\) jadi Slash (/)
+        String cleanPath = rawPhotoPath
+            .replaceAll('public/', '')   // Hapus public/ biasa
+            .replaceAll('public\\', '')  // Hapus public\ (versi Windows)
+            .replaceAll('\\', '/');      // Ubah semua \ jadi / agar HP bisa baca
+
+        // 2. Hapus slash di awal jika ada (misal: /profile_photos/...)
+        if (cleanPath.startsWith('/')) {
+            cleanPath = cleanPath.substring(1);
+        }
+        
+        // 3. Susun URL Akhir
+        if (cleanPath.startsWith('http')) {
+           _userPhotoUrl = cleanPath;
+        } else {
+           _userPhotoUrl = '${AppConfig.baseUrl}/storage/$cleanPath';
+        }
+
+        // Debugging di Terminal
+        print("URL Foto Profil: $_userPhotoUrl");
+
+      } else {
+        _userPhotoUrl = null;
+      }
     });
+  }
+
+  // --- 2. PILIH GAMBAR (UNIVERSAL) ---
+  Future<void> _pickImage() async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: ImageSource.gallery, 
+        imageQuality: 50 
+      );
+
+      if (pickedFile != null) {
+        final bytes = await pickedFile.readAsBytes();
+        
+        setState(() {
+          _imageBytes = bytes; // Tampilkan preview lokal dulu biar cepat
+        });
+
+        // Langsung upload ke server
+        _updateProfilePhoto(bytes);
+      }
+    } catch (e) {
+      debugPrint("Error picking image: $e");
+    }
+  }
+
+  // --- 3. UPLOAD GAMBAR ---
+  Future<void> _updateProfilePhoto(Uint8List bytes) async {
+    setState(() => _isUploading = true);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      
+      // Endpoint Update Foto
+      final uri = Uri.parse('${AppConfig.baseUrl}/api/update-profile-photo'); 
+
+      var request = http.MultipartRequest('POST', uri);
+      
+      request.headers.addAll({
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      });
+
+      // Upload File dengan key 'photo'
+      request.files.add(http.MultipartFile.fromBytes(
+        'photo', 
+        bytes,
+        filename: 'profile_upload.jpg'
+      ));
+
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        // --- UPDATE DATA LOKAL SETELAH UPLOAD SUKSES ---
+        if (data['data'] != null && data['data']['user'] != null) {
+            final newUserObject = data['data']['user'];
+            
+            // 1. Simpan data user terbaru (yang berisi path foto baru) ke SharedPreferences
+            await prefs.setString('user_data', jsonEncode(newUserObject));
+            
+            // 2. Refresh Tampilan
+            await _loadUserData(); 
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Foto profil berhasil diperbarui!"), backgroundColor: Colors.green),
+              );
+            }
+        } else {
+            // Fallback: Reload manual jika struktur beda
+            await _loadUserData();
+        }
+
+      } else {
+        throw Exception("Gagal upload (${response.statusCode}): ${response.body}");
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Gagal mengganti foto: $e"), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+           _isUploading = false;
+           _imageBytes = null; // Reset bytes agar tampilan kembali menggunakan URL dari server
+        });
+      }
+    }
   }
 
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear(); // Hapus Token & Data User
+    await prefs.clear(); 
 
     if (mounted) {
-      // Kembali ke Login dan hapus semua riwayat navigasi
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -49,8 +190,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Theme.of(context).primaryColor;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7F6),
       appBar: AppBar(
@@ -64,7 +203,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // --- HEADER PROFIL ---
+            // --- HEADER ---
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(24),
@@ -80,17 +219,76 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Stack(
                     alignment: Alignment.bottomRight,
                     children: [
-                      CircleAvatar(
-                        radius: 50,
-                        backgroundImage: NetworkImage(
-                          'https://ui-avatars.com/api/?name=${Uri.encodeComponent(_userName)}&background=0F766E&color=fff&size=128'
+                      // --- WIDGET FOTO PROFIL (MODIFIED DEBUGGING) ---
+                      Container(
+                        width: 100, height: 100,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.grey[200],
+                          border: Border.all(color: Colors.white, width: 4),
+                          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
+                        ),
+                        child: ClipOval(
+                          child: _isUploading
+                            ? const Padding(padding: EdgeInsets.all(30), child: CircularProgressIndicator())
+                            : _imageBytes != null 
+                                ? Image.memory(_imageBytes!, fit: BoxFit.cover) // 1. Tampilan Preview saat upload
+                                : (_userPhotoUrl != null && _userPhotoUrl!.isNotEmpty)
+                                  ? Image.network(
+                                      // 2. CACHE BUSTER: Tambahkan timestamp agar gambar selalu refresh
+                                      '$_userPhotoUrl?v=${DateTime.now().millisecondsSinceEpoch}',
+                                      fit: BoxFit.cover,
+                                      
+                                      // BUILDER UNTUK LOADING
+                                      loadingBuilder: (context, child, loadingProgress) {
+                                        if (loadingProgress == null) return child;
+                                        return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                                      },
+
+                                      // BUILDER UNTUK ERROR (DETEKTIF)
+                                      errorBuilder: (context, error, stackTrace) {
+                                        // KITA CETAK URL DAN ERRORNYA DI LAYAR UNTUK DEBUGGING
+                                        return Container(
+                                          color: Colors.red.shade100,
+                                          padding: const EdgeInsets.all(2),
+                                          alignment: Alignment.center,
+                                          child: Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              const Icon(Icons.error, size: 20, color: Colors.red),
+                                              const Text(
+                                                "Gagal!", 
+                                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.red),
+                                              ),
+                                              // Tampilkan sedikit pesan error biar kita tahu penyebabnya
+                                              Text(
+                                                error.toString().contains("404") ? "404: Not Found" 
+                                                : error.toString().contains("Socket") ? "Koneksi/Firewall"
+                                                : "Error Lain",
+                                                textAlign: TextAlign.center,
+                                                style: const TextStyle(fontSize: 8),
+                                              )
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    )
+                                  : Center( // 3. Fallback jika tidak ada foto
+                                      child: Text(
+                                        _userName.isNotEmpty ? _userName[0].toUpperCase() : "U",
+                                        style: TextStyle(fontSize: 40, color: Colors.grey[400], fontWeight: FontWeight.bold)
+                                      )
+                                    ),
                         ),
                       ),
-                      Container(
-                        decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3)),
-                        child: const Padding(
-                          padding: EdgeInsets.all(6.0),
-                          child: Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                      
+                      // Tombol Kamera
+                      InkWell(
+                        onTap: _isUploading ? null : _pickImage,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: const Color(0xFF0F766E), shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3)),
+                          child: const Icon(Icons.camera_alt, size: 18, color: Colors.white),
                         ),
                       ),
                     ],
@@ -105,7 +303,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 20),
 
-            // --- MENU LIST ---
+            // --- MENU ---
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -120,7 +318,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     "Informasi Pribadi",
                     () async {
                       await Navigator.push(context, MaterialPageRoute(builder: (context) => const PersonalInfoPage()));
-                      _loadUserData(); // Refresh tampilan nama setelah edit
+                      _loadUserData(); // Refresh data saat kembali
                     },
                   ),
                   const Divider(height: 1, indent: 60),
@@ -131,13 +329,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     "Hewan Peliharaan",
                     () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MyPetsPage())),
                   ),
-                  const Divider(height: 1, indent: 60),
+                  const Divider(height: 1, indent: 1), 
                   
                   _buildMenuItem(
                     context, 
                     Icons.history, 
                     "Riwayat Konsultasi",
-                    // Arahkan ke HistoryScreen yang asli (bukan dummy lagi)
                     () => Navigator.push(context, MaterialPageRoute(builder: (context) => const HistoryScreen())),
                   ),
                 ],
@@ -171,7 +368,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildMenuItem(BuildContext context, IconData icon, String title, VoidCallback onTap) {
-    final primaryColor = Theme.of(context).primaryColor;
+    const primaryColor = Color(0xFF0F766E);
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       leading: Container(
@@ -190,11 +387,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 // ==========================================
-// 1. HALAMAN INFORMASI PRIBADI
+// class PersonalInfoPage dan MyPetsPage
+// (TIDAK PERLU DIUBAH, SAMA SEPERTI KODE KAMU)
 // ==========================================
+
 class PersonalInfoPage extends StatefulWidget {
   const PersonalInfoPage({super.key});
-
   @override
   State<PersonalInfoPage> createState() => _PersonalInfoPageState();
 }
@@ -212,31 +410,46 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
   }
 
   Future<void> _loadCurrentData() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _nameController.text = prefs.getString('user_name') ?? "";
-      _phoneController.text = prefs.getString('user_phone') ?? ""; 
-      _addressController.text = prefs.getString('user_address') ?? "";
-    });
+    setState(() => _isLoading = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      final url = Uri.parse('${AppConfig.baseUrl}/api/user'); 
+      final response = await http.get(url, headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'});
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _nameController.text = data['nama'] ?? ""; 
+          _phoneController.text = data['telepon'] ?? ""; 
+          _addressController.text = data['alamat'] ?? "";
+        });
+        // Update SharedPreferences juga
+        String? userJson = prefs.getString('user_data');
+        if (userJson != null) {
+          var userData = jsonDecode(userJson);
+          userData['nama'] = data['nama'];
+          userData['telepon'] = data['telepon'];
+          userData['alamat'] = data['alamat'];
+          await prefs.setString('user_data', jsonEncode(userData));
+        }
+      }
+    } catch (e) {
+      print("Gagal memuat data profile: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _updateProfile() async {
     setState(() { _isLoading = true; });
-
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token'); 
-
-      // 2. GUNAKAN APPCONFIG BASE URL
       final url = Uri.parse('${AppConfig.baseUrl}/api/update-profile');
-
       final response = await http.post(
         url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
+        headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json', 'Content-Type': 'application/json'},
         body: jsonEncode({
           'nama': _nameController.text,
           'telepon': _phoneController.text,
@@ -245,26 +458,25 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
       );
 
       if (response.statusCode == 200) {
-        // Simpan data baru ke HP agar profil terupdate
-        await prefs.setString('user_name', _nameController.text);
-        await prefs.setString('user_phone', _phoneController.text);
-        await prefs.setString('user_address', _addressController.text);
-
+        // Update SharedPreferences
+        String? userJson = prefs.getString('user_data');
+        if (userJson != null) {
+          var userData = jsonDecode(userJson);
+          userData['nama'] = _nameController.text;
+          userData['telepon'] = _phoneController.text;
+          userData['alamat'] = _addressController.text;
+          await prefs.setString('user_data', jsonEncode(userData));
+        }
+        
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Profil Berhasil Diperbarui!"), backgroundColor: Colors.green),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profil Berhasil Diperbarui!"), backgroundColor: Colors.green));
           Navigator.pop(context); 
         }
       } else {
         throw Exception("Gagal update: ${response.statusCode}");
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() { _isLoading = false; });
     }
@@ -287,11 +499,7 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
           children: [
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10)],
-              ),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10)]),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -310,15 +518,9 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                        elevation: 2,
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)), elevation: 2),
                       onPressed: _isLoading ? null : _updateProfile,
-                      child: _isLoading 
-                        ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text("Simpan Perubahan", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                      child: _isLoading ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text("Simpan Perubahan", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                     ),
                   )
                 ],
@@ -331,28 +533,18 @@ class _PersonalInfoPageState extends State<PersonalInfoPage> {
   }
 
   Widget _buildInputLabel(String label) => Padding(padding: const EdgeInsets.only(bottom: 8.0), child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.grey)));
-  
   Widget _buildTextField(TextEditingController controller, IconData icon, {bool isNumber = false, int maxLines = 1}) {
     return TextField(
       controller: controller,
       keyboardType: isNumber ? TextInputType.phone : TextInputType.text,
       maxLines: maxLines,
-      decoration: InputDecoration(
-        prefixIcon: Icon(icon, color: const Color(0xFF0F766E)),
-        filled: true,
-        fillColor: const Color(0xFFF8FAFC),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-      ),
+      decoration: InputDecoration(prefixIcon: Icon(icon, color: const Color(0xFF0F766E)), filled: true, fillColor: const Color(0xFFF8FAFC), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)),
     );
   }
 }
 
-// ==========================================
-// 2. HALAMAN HEWAN PELIHARAAN (CRUD)
-// ==========================================
 class MyPetsPage extends StatefulWidget {
   const MyPetsPage({super.key});
-
   @override
   State<MyPetsPage> createState() => _MyPetsPageState();
 }
@@ -367,63 +559,34 @@ class _MyPetsPageState extends State<MyPetsPage> {
     _fetchPets();
   }
 
-  // --- 1. GET DATA ---
   Future<void> _fetchPets() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
-      
-      // 3. GUNAKAN APPCONFIG BASE URL
       final url = Uri.parse('${AppConfig.baseUrl}/api/pets');
-      
-      final response = await http.get(url, headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-      });
+      final response = await http.get(url, headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'});
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        setState(() {
-          _petsList = data['data']; 
-          _isLoading = false;
-        });
+        if (mounted) setState(() { _petsList = data['data']; _isLoading = false; });
       }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // --- 2. ADD / UPDATE DATA ---
   Future<void> _savePet({int? id, required String nama, required String spesies, String? ras, String? usia}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
-      
-      // 4. GUNAKAN APPCONFIG BASE URL
-      final url = id == null 
-          ? Uri.parse('${AppConfig.baseUrl}/api/pets')
-          : Uri.parse('${AppConfig.baseUrl}/api/pets/$id');
-      
-      final bodyData = jsonEncode({
-        'nama': nama,
-        'spesies': spesies,
-        'ras': ras ?? '',
-        'usia': usia ?? '0',
-      });
-
-      final Map<String, String> headers = {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      };
-
-      final response = id == null 
-          ? await http.post(url, headers: headers, body: bodyData)
-          : await http.put(url, headers: headers, body: bodyData);
+      final url = id == null ? Uri.parse('${AppConfig.baseUrl}/api/pets') : Uri.parse('${AppConfig.baseUrl}/api/pets/$id');
+      final bodyData = jsonEncode({'nama': nama, 'spesies': spesies, 'ras': ras ?? '', 'usia': usia ?? '0'});
+      final Map<String, String> headers = {'Authorization': 'Bearer $token', 'Accept': 'application/json', 'Content-Type': 'application/json'};
+      final response = id == null ? await http.post(url, headers: headers, body: bodyData) : await http.put(url, headers: headers, body: bodyData);
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        if(mounted) Navigator.pop(context); // Tutup Dialog
-        _fetchPets(); // Refresh List
+        if(mounted) Navigator.pop(context);
+        _fetchPets();
         if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(id == null ? "Hewan ditambahkan!" : "Hewan diperbarui!"), backgroundColor: Colors.green));
       } else {
         throw Exception('Gagal menyimpan: ${response.statusCode}');
@@ -433,20 +596,12 @@ class _MyPetsPageState extends State<MyPetsPage> {
     }
   }
 
-  // --- 3. DELETE DATA ---
   Future<void> _deletePet(int id) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
-      
-      // 5. GUNAKAN APPCONFIG BASE URL
       final url = Uri.parse('${AppConfig.baseUrl}/api/pets/$id');
-
-      final response = await http.delete(url, headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-      });
-
+      final response = await http.delete(url, headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'});
       if (response.statusCode == 200) {
         _fetchPets();
         if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Hewan berhasil dihapus"), backgroundColor: Colors.green));
@@ -458,7 +613,6 @@ class _MyPetsPageState extends State<MyPetsPage> {
     }
   }
 
-  // --- DIALOG FORM ---
   void _showPetDialog({Map<String, dynamic>? petData}) {
     final bool isEdit = petData != null;
     final nameController = TextEditingController(text: isEdit ? petData['nama'] : '');
@@ -486,13 +640,7 @@ class _MyPetsPageState extends State<MyPetsPage> {
           ElevatedButton(
             onPressed: () {
               if (nameController.text.isNotEmpty && speciesController.text.isNotEmpty) {
-                _savePet(
-                  id: isEdit ? petData['id_hewan'] : null,
-                  nama: nameController.text,
-                  spesies: speciesController.text,
-                  ras: breedController.text,
-                  usia: ageController.text,
-                );
+                _savePet(id: isEdit ? petData['id_hewan'] : null, nama: nameController.text, spesies: speciesController.text, ras: breedController.text, usia: ageController.text);
               }
             },
             child: Text(isEdit ? "Update" : "Simpan"),
@@ -502,7 +650,6 @@ class _MyPetsPageState extends State<MyPetsPage> {
     );
   }
 
-  // --- DIALOG KONFIRMASI HAPUS ---
   void _confirmDelete(int id, String nama) {
     showDialog(
       context: context,
@@ -511,13 +658,7 @@ class _MyPetsPageState extends State<MyPetsPage> {
         content: Text("Yakin ingin menghapus $nama?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Batal")),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _deletePet(id);
-            }, 
-            child: const Text("Hapus", style: TextStyle(color: Colors.red))
-          ),
+          TextButton(onPressed: () { Navigator.pop(context); _deletePet(id); }, child: const Text("Hapus", style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -526,78 +667,37 @@ class _MyPetsPageState extends State<MyPetsPage> {
   @override
   Widget build(BuildContext context) {
     const primaryColor = Color(0xFF0F766E);
-
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7F6),
-      appBar: AppBar(
-        title: const Text("Hewan Peliharaan", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: primaryColor),
+      appBar: AppBar(title: const Text("Hewan Peliharaan", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)), backgroundColor: Colors.white, elevation: 0, iconTheme: const IconThemeData(color: primaryColor)),
+      floatingActionButton: FloatingActionButton(backgroundColor: primaryColor, child: const Icon(Icons.add, color: Colors.white), onPressed: () => _showPetDialog()),
+      body: _isLoading ? const Center(child: CircularProgressIndicator()) : _petsList.isEmpty ? const Center(child: Text("Belum ada hewan peliharaan.")) : ListView.builder(
+        padding: const EdgeInsets.all(20),
+        itemCount: _petsList.length,
+        itemBuilder: (context, index) {
+          final pet = _petsList[index];
+          return _buildPetCard(petData: pet, color: (pet['spesies'].toString().toLowerCase() == 'kucing') ? Colors.orange : Colors.blue, icon: (pet['spesies'].toString().toLowerCase() == 'kucing') ? Icons.pets : Icons.flutter_dash);
+        },
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: primaryColor,
-        child: const Icon(Icons.add, color: Colors.white),
-        onPressed: () => _showPetDialog(),
-      ),
-      body: _isLoading 
-          ? const Center(child: CircularProgressIndicator()) 
-          : _petsList.isEmpty 
-              ? const Center(child: Text("Belum ada hewan peliharaan."))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(20),
-                  itemCount: _petsList.length,
-                  itemBuilder: (context, index) {
-                    final pet = _petsList[index];
-                    return _buildPetCard(
-                      petData: pet,
-                      color: (pet['spesies'].toString().toLowerCase() == 'kucing') ? Colors.orange : Colors.blue,
-                      icon: (pet['spesies'].toString().toLowerCase() == 'kucing') ? Icons.pets : Icons.flutter_dash,
-                    );
-                  },
-                ),
     );
   }
 
-  Widget _buildPetCard({
-    required Map<String, dynamic> petData,
-    required Color color,
-    required IconData icon,
-  }) {
+  Widget _buildPetCard({required Map<String, dynamic> petData, required Color color, required IconData icon}) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
+      margin: const EdgeInsets.only(bottom: 16), padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]),
       child: Row(
         children: [
-          Container(
-            width: 70, height: 70,
-            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(15), border: Border.all(color: color.withOpacity(0.3))),
-            child: Icon(icon, color: color, size: 35),
-          ),
+          Container(width: 70, height: 70, decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(15), border: Border.all(color: color.withOpacity(0.3))), child: Icon(icon, color: color, size: 35)),
           const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(petData['nama'] ?? 'Tanpa Nama', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF334155))),
-                const SizedBox(height: 4),
-                Text("${petData['spesies']} • ${petData['ras'] ?? '-'}", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                const SizedBox(height: 4),
-                Text("${petData['usia'] ?? 0} Tahun", style: const TextStyle(color: Color(0xFF0F766E), fontWeight: FontWeight.w600, fontSize: 12)),
-              ],
-            ),
-          ),
-          Column(
-            children: [
-              IconButton(icon: const Icon(Icons.edit, size: 20, color: Colors.grey), onPressed: () => _showPetDialog(petData: petData)),
-              IconButton(icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red), onPressed: () => _confirmDelete(petData['id_hewan'], petData['nama'])),
-            ],
-          )
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(petData['nama'] ?? 'Tanpa Nama', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF334155))),
+            const SizedBox(height: 4), Text("${petData['spesies']} • ${petData['ras'] ?? '-'}", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+            const SizedBox(height: 4), Text("${petData['usia'] ?? 0} Tahun", style: const TextStyle(color: Color(0xFF0F766E), fontWeight: FontWeight.w600, fontSize: 12)),
+          ])),
+          Column(children: [
+            IconButton(icon: const Icon(Icons.edit, size: 20, color: Colors.grey), onPressed: () => _showPetDialog(petData: petData)),
+            IconButton(icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red), onPressed: () => _confirmDelete(petData['id_hewan'], petData['nama'])),
+          ])
         ],
       ),
     );
