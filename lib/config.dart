@@ -1,33 +1,33 @@
-// lib/config.dart
-import 'package:flutter/foundation.dart'; // Untuk kIsWeb
-import 'package:shared_preferences/shared_preferences.dart'; // WAJIB: Untuk simpan IP
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AppConfig {
-  // -------------------------------------------------------------
-  // IP Default (Cadangan jika belum disetting di menu Login)
-  // -------------------------------------------------------------
-  static String _defaultIp = "192.168.1.12"; 
+  // =========================================================
+  // GANTI BAGIAN INI SESUAI PERANGKAT ANDA
+  // =========================================================
+  
+  // OPSI A: Jika pakai Emulator Android Studio
+  static String _defaultIp = "10.0.2.2"; 
+  
+  // OPSI B: Jika pakai HP Fisik (Cek IP Laptop, misal 192.168.1.12)
+  // static String _defaultIp = "192.168.1.12"; 
 
-  // Variable private untuk menampung URL yang aktif saat ini
+  // =========================================================
+  
   static String _activeUrl = "";
 
-  // GETTER: Untuk mengambil URL di seluruh aplikasi
   static String get baseUrl {
-    // 1. Jika sudah ada URL aktif (dari settingan), pakai itu
-    if (_activeUrl.isNotEmpty) {
-      return _activeUrl;
-    }
-
-    // 2. Jika belum ada, gunakan logika default (Web vs Mobile)
-    if (kIsWeb) {
-      return "http://127.0.0.1:8000"; 
-    } else {
-      return "http://$_defaultIp:8000";
-    }
+    // 1. Prioritaskan URL yang sudah di-load/aktif
+    if (_activeUrl.isNotEmpty) return _activeUrl;
+    
+    // 2. Jika Web, pakai localhost biasa
+    if (kIsWeb) return "http://127.0.0.1:8000";
+    
+    // 3. Jika Android/iOS, pakai IP Default di atas
+    return "http://$_defaultIp:8000";
   }
 
-  // --- FUNGSI 1: LOAD IP (Dipanggil di main.dart) ---
-  // Mengecek apakah user pernah menyimpan IP khusus sebelumnya
+  // Dipanggil oleh main.dart (Baris 13 kode Anda)
   static Future<void> loadBaseUrl() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -35,29 +35,17 @@ class AppConfig {
       
       if (savedIp != null && savedIp.isNotEmpty) {
         _activeUrl = "http://$savedIp:8000";
-        print("Config Loaded from Storage: $_activeUrl");
-      } else {
-        // Jika tidak ada simpanan, inisialisasi default
-        _activeUrl = kIsWeb ? "http://127.0.0.1:8000" : "http://$_defaultIp:8000";
+        if (kDebugMode) print("Config Loaded: $_activeUrl");
       }
     } catch (e) {
-      print("Gagal load config: $e");
+      if (kDebugMode) print("Config Error: $e");
     }
   }
 
-  // --- FUNGSI 2: SET IP (Dipanggil di Login Screen) ---
-  // Menyimpan IP baru yang diinput user
+  // Opsional: Untuk fitur ganti IP di halaman Login
   static Future<void> setBaseUrl(String newIp) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      // Simpan hanya angkanya saja, misal: 192.168.1.50
-      await prefs.setString('server_ip', newIp); 
-      
-      // Update variable aktif agar aplikasi langsung berubah arah tanpa restart
-      _activeUrl = "http://$newIp:8000";
-      print("Config Updated manually: $_activeUrl");
-    } catch (e) {
-      print("Gagal simpan config: $e");
-    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('server_ip', newIp);
+    _activeUrl = "http://$newIp:8000";
   }
 }
