@@ -13,6 +13,8 @@ dependencies:
   flutter:
     sdk: flutter
   image_picker: ^1.0.4
+  fl_chart: ^0.66.0  # Tambahkan ini untuk Grafik
+  google_fonts: ^6.1.0 # Opsional untuk font cantik
   
   # --- PENTING: Perhatikan spasi di bawah ini lurus vertikal ---
   http: ^1.1.0
