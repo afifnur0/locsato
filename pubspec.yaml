@@ -18,9 +18,10 @@ dependencies:
   
   # --- PENTING: Perhatikan spasi di bawah ini lurus vertikal ---
   http: ^1.1.0
-  intl: ^0.18.1
+  intl: ^0.20.2
   cupertino_icons: ^1.0.8
   shared_preferences: ^2.5.3
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

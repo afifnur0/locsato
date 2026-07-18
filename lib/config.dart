@@ -13,23 +13,33 @@ class AppConfig {
 
   // GETTER: Untuk mengambil URL di seluruh aplikasi
   static String get baseUrl {
-    // 1. Jika sudah ada URL aktif (dari settingan), pakai itu
+    // 1. ATURAN MUTLAK UNTUK WEB (CHROME)
+    // Abaikan URL apapun yang tersimpan, paksa gunakan 127.0.0.1
+    if (kIsWeb) {
+      return "http://127.0.0.1:8000"; 
+    }
+
+    // 2. ATURAN UNTUK MOBILE (ANDROID/IOS)
+    // Jika sudah ada URL aktif (dari settingan), pakai itu
     if (_activeUrl.isNotEmpty) {
       return _activeUrl;
     }
 
-    // 2. Jika belum ada, gunakan logika default (Web vs Mobile)
-    if (kIsWeb) {
-      return "http://127.0.0.1:8000"; 
-    } else {
-      return "http://$_defaultIp:8000";
-    }
+    // 3. Jika belum ada settingan sama sekali, pakai default
+    return "http://$_defaultIp:8000";
   }
 
   // --- FUNGSI 1: LOAD IP (Dipanggil di main.dart) ---
   // Mengecek apakah user pernah menyimpan IP khusus sebelumnya
   static Future<void> loadBaseUrl() async {
     try {
+      // Jika di web, jangan load IP dari SharedPreferences
+      if (kIsWeb) {
+        _activeUrl = "http://127.0.0.1:8000";
+        print("Config Loaded for Web: $_activeUrl");
+        return; // Hentikan fungsi di sini
+      }
+
       final prefs = await SharedPreferences.getInstance();
       final savedIp = prefs.getString('server_ip');
       
@@ -38,7 +48,7 @@ class AppConfig {
         print("Config Loaded from Storage: $_activeUrl");
       } else {
         // Jika tidak ada simpanan, inisialisasi default
-        _activeUrl = kIsWeb ? "http://127.0.0.1:8000" : "http://$_defaultIp:8000";
+        _activeUrl = "http://$_defaultIp:8000";
       }
     } catch (e) {
       print("Gagal load config: $e");
@@ -49,6 +59,12 @@ class AppConfig {
   // Menyimpan IP baru yang diinput user
   static Future<void> setBaseUrl(String newIp) async {
     try {
+      // Blokir penyimpanan IP jika sedang berjalan di Web
+      if (kIsWeb) {
+        print("Set IP diabaikan karena berjalan di Web.");
+        return;
+      }
+
       final prefs = await SharedPreferences.getInstance();
       // Simpan hanya angkanya saja, misal: 192.168.1.50
       await prefs.setString('server_ip', newIp); 

@@ -1,4 +1,3 @@
-// lib/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,7 +5,9 @@ import 'dart:convert';
 import 'home_screen.dart'; 
 import 'register_screen.dart'; 
 import 'config.dart'; 
-import 'admin_dashboard_screen.dart'; // Pastikan file ini sudah dibuat
+import 'admin_dashboard_screen.dart'; 
+import 'klinik_dashboard_screen.dart'; 
+import 'doctor_dashboard_screen.dart'; // <--- TAMBAHAN: Import file dashboard dokter
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,8 +17,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController(text: 'helena@gmail.com');
+  final TextEditingController _passwordController = TextEditingController(text: 'KatalonTestLocsato26!');
   bool _isLoading = false;
   bool _obscurePassword = true;
 
@@ -114,14 +115,23 @@ class _LoginScreenState extends State<LoginScreen> {
             const SnackBar(content: Text("Login Berhasil!"), backgroundColor: Colors.green)
           );
           
-          // --- LOGIKA PEMISAH ADMIN VS USER ---
-          // Pastikan ambil 'peran' dan ubah ke lowercase agar aman
+          // --- LOGIKA PEMISAH ADMIN VS KLINIK VS DOKTER VS USER ---
           String role = (userData['peran'] ?? '').toString().toLowerCase(); 
 
           if (role == 'admin') {
             Navigator.pushReplacement(
               context, 
               MaterialPageRoute(builder: (context) => const AdminDashboardScreen())
+            );
+          } else if (role == 'klinik') {
+            Navigator.pushReplacement(
+              context, 
+              MaterialPageRoute(builder: (context) => const KlinikDashboardScreen())
+            );
+          } else if (role == 'dokter') { // <--- TAMBAHAN: Logika Role Dokter
+            Navigator.pushReplacement(
+              context, 
+              MaterialPageRoute(builder: (context) => const DoctorDashboardScreen())
             );
           } else {
             Navigator.pushReplacement(
@@ -172,7 +182,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 Container(
                   height: 340,
                   decoration: const BoxDecoration(
-                    color: primaryColor,
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF2A5C5F), Color(0xFF3C8085)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                     borderRadius: BorderRadius.only(
                       bottomLeft: Radius.circular(60),
                       bottomRight: Radius.circular(60),
@@ -274,35 +288,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   // Tombol Masuk
                   ElevatedButton(
                     onPressed: _isLoading ? null : _login,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      elevation: 8,
-                      shadowColor: primaryColor.withOpacity(0.4),
-                    ),
                     child: _isLoading
                         ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
                         : const Text("MASUK", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1)),
                   ),
-
-                  const SizedBox(height: 30),
-
-                  // Divider & Sosmed
-                  Row(children: [
-                    const Expanded(child: Divider(thickness: 1, color: Colors.grey)),
-                    Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text("Atau masuk dengan", style: TextStyle(color: Colors.grey[600], fontSize: 12))),
-                    const Expanded(child: Divider(thickness: 1, color: Colors.grey)),
-                  ]),
-                  
-                  const SizedBox(height: 20),
-                  
-                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    _buildSocialButton(Icons.g_mobiledata, Colors.red),
-                    const SizedBox(width: 20),
-                    _buildSocialButton(Icons.facebook, Colors.blue),
-                  ]),
 
                   const SizedBox(height: 30),
 
@@ -334,50 +323,21 @@ class _LoginScreenState extends State<LoginScreen> {
     required Color color, 
     bool isPassword = false
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey[100], 
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1), 
-            blurRadius: 10, 
-            offset: const Offset(0, 5)
-          )
-        ],
+    return TextField(
+      controller: controller, 
+      obscureText: isPassword ? _obscurePassword : false,
+      keyboardType: isPassword ? TextInputType.text : TextInputType.emailAddress,
+      style: const TextStyle(color: Colors.black87),
+      decoration: InputDecoration(
+        hintText: hint, 
+        prefixIcon: Icon(icon, color: color),
+        suffixIcon: isPassword 
+          ? IconButton(
+              icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey), 
+              onPressed: () { setState(() { _obscurePassword = !_obscurePassword; }); }
+            )
+          : null,
       ),
-      child: TextField(
-        controller: controller, 
-        obscureText: isPassword ? _obscurePassword : false,
-        keyboardType: isPassword ? TextInputType.text : TextInputType.emailAddress,
-        style: const TextStyle(color: Colors.black87),
-        decoration: InputDecoration(
-          hintText: hint, 
-          hintStyle: const TextStyle(color: Colors.grey),
-          prefixIcon: Icon(icon, color: color),
-          suffixIcon: isPassword 
-            ? IconButton(
-                icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey), 
-                onPressed: () { setState(() { _obscurePassword = !_obscurePassword; }); }
-              )
-            : null,
-          border: InputBorder.none, 
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        ),
-      ),
-    );
-  }
-
-  // WIDGET HELPER SOCIAL BUTTON
-  Widget _buildSocialButton(IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey[300]!), 
-        borderRadius: BorderRadius.circular(12), 
-        color: Colors.white
-      ),
-      child: Icon(icon, color: color, size: 30),
     );
   }
 }

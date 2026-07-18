@@ -107,14 +107,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               // INPUT NAMA
               TextField(
                 controller: _nameController,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: "Nama Lengkap",
-                  prefixIcon: const Icon(Icons.person_outline, color: primaryColor),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: primaryColor, width: 2),
-                  ),
+                  prefixIcon: Icon(Icons.person_outline, color: primaryColor),
                 ),
               ),
               const SizedBox(height: 16),
@@ -123,14 +118,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: "Email Address",
-                  prefixIcon: const Icon(Icons.email_outlined, color: primaryColor),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: primaryColor, width: 2),
-                  ),
+                  prefixIcon: Icon(Icons.email_outlined, color: primaryColor),
                 ),
               ),
               const SizedBox(height: 16),
@@ -139,14 +129,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               TextField(
                 controller: _passwordController,
                 obscureText: true,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: "Password",
-                  prefixIcon: const Icon(Icons.lock_outline, color: primaryColor),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: primaryColor, width: 2),
-                  ),
+                  prefixIcon: Icon(Icons.lock_outline, color: primaryColor),
                 ),
               ),
               const SizedBox(height: 30),
@@ -154,12 +139,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
               // TOMBOL DAFTAR
               ElevatedButton(
                 onPressed: _isLoading ? null : _register,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
                 child: _isLoading
                     ? const SizedBox(
                         height: 20, width: 20,

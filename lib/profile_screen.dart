@@ -190,197 +190,173 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const primaryColor = Color(0xFF3C8085);
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7F6),
-      appBar: AppBar(
-        title: const Text("Profil Saya", style: TextStyle(fontWeight: FontWeight.bold)),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        foregroundColor: Colors.black,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            // --- HEADER ---
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(color: Colors.grey.withOpacity(0.08), blurRadius: 15, offset: const Offset(0, 5)),
-                ],
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              // COMPACT HEADER
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "Profil Saya",
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.settings, color: Colors.grey),
+                      onPressed: () {}, // Future settings
+                    )
+                  ],
+                ),
               ),
-              child: Column(
-                children: [
-                  Stack(
-                    alignment: Alignment.bottomRight,
-                    children: [
-                      // --- WIDGET FOTO PROFIL (MODIFIED DEBUGGING) ---
-                      Container(
-                        width: 100, height: 100,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.grey[200],
-                          border: Border.all(color: Colors.white, width: 4),
-                          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
-                        ),
-                        child: ClipOval(
-                          child: _isUploading
-                            ? const Padding(padding: EdgeInsets.all(30), child: CircularProgressIndicator())
-                            : _imageBytes != null 
-                                ? Image.memory(_imageBytes!, fit: BoxFit.cover) // 1. Tampilan Preview saat upload
-                                : (_userPhotoUrl != null && _userPhotoUrl!.isNotEmpty)
-                                  ? Image.network(
-                                      // 2. CACHE BUSTER: Tambahkan timestamp agar gambar selalu refresh
-                                      '$_userPhotoUrl?v=${DateTime.now().millisecondsSinceEpoch}',
-                                      fit: BoxFit.cover,
-                                      
-                                      // BUILDER UNTUK LOADING
-                                      loadingBuilder: (context, child, loadingProgress) {
-                                        if (loadingProgress == null) return child;
-                                        return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-                                      },
 
-                                      // BUILDER UNTUK ERROR (DETEKTIF)
-                                      errorBuilder: (context, error, stackTrace) {
-                                        // KITA CETAK URL DAN ERRORNYA DI LAYAR UNTUK DEBUGGING
-                                        return Container(
-                                          color: Colors.red.shade100,
-                                          padding: const EdgeInsets.all(2),
-                                          alignment: Alignment.center,
-                                          child: Column(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              const Icon(Icons.error, size: 20, color: Colors.red),
-                                              const Text(
-                                                "Gagal!", 
-                                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.red),
-                                              ),
-                                              // Tampilkan sedikit pesan error biar kita tahu penyebabnya
-                                              Text(
-                                                error.toString().contains("404") ? "404: Not Found" 
-                                                : error.toString().contains("Socket") ? "Koneksi/Firewall"
-                                                : "Error Lain",
-                                                textAlign: TextAlign.center,
-                                                style: const TextStyle(fontSize: 8),
-                                              )
-                                            ],
-                                          ),
-                                        );
-                                      },
-                                    )
-                                  : Center( // 3. Fallback jika tidak ada foto
-                                      child: Text(
-                                        _userName.isNotEmpty ? _userName[0].toUpperCase() : "U",
-                                        style: TextStyle(fontSize: 40, color: Colors.grey[400], fontWeight: FontWeight.bold)
+              const SizedBox(height: 10),
+
+              // PROFILE PICTURE & INFO
+              Center(
+                child: Column(
+                  children: [
+                    Stack(
+                      alignment: Alignment.bottomRight,
+                      children: [
+                        Container(
+                          width: 110, height: 110,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.grey[200],
+                            border: Border.all(color: primaryColor.withOpacity(0.2), width: 4),
+                          ),
+                          child: ClipOval(
+                            child: _isUploading
+                              ? const Padding(padding: EdgeInsets.all(30), child: CircularProgressIndicator())
+                              : _imageBytes != null 
+                                  ? Image.memory(_imageBytes!, fit: BoxFit.cover) 
+                                  : (_userPhotoUrl != null && _userPhotoUrl!.isNotEmpty)
+                                    ? Image.network(
+                                        '$_userPhotoUrl?v=${DateTime.now().millisecondsSinceEpoch}',
+                                        fit: BoxFit.cover,
+                                        loadingBuilder: (context, child, loadingProgress) {
+                                          if (loadingProgress == null) return child;
+                                          return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                                        },
+                                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, size: 50, color: Colors.grey),
                                       )
-                                    ),
+                                    : Center(
+                                        child: Text(
+                                          _userName.isNotEmpty ? _userName[0].toUpperCase() : "U",
+                                          style: TextStyle(fontSize: 40, color: Colors.grey[400], fontWeight: FontWeight.bold)
+                                        )
+                                      ),
+                          ),
                         ),
+                        InkWell(
+                          onTap: _isUploading ? null : _pickImage,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(color: primaryColor, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3)),
+                            child: const Icon(Icons.camera_alt, size: 18, color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(_userName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+                    const SizedBox(height: 4),
+                    Text(_userEmail, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // --- MENU ---
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildMenuItem(
+                        context, 
+                        Icons.person_outline, 
+                        "Informasi Pribadi",
+                        () async {
+                          await Navigator.push(context, MaterialPageRoute(builder: (context) => const PersonalInfoPage()));
+                          _loadUserData(); 
+                        },
                       ),
-                      
-                      // Tombol Kamera
-                      InkWell(
-                        onTap: _isUploading ? null : _pickImage,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(color: const Color(0xFF0F766E), shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3)),
-                          child: const Icon(Icons.camera_alt, size: 18, color: Colors.white),
-                        ),
+                      Divider(height: 1, indent: 60, color: Colors.grey.shade100),
+                      _buildMenuItem(
+                        context, 
+                        Icons.pets, 
+                        "Hewan Peliharaan",
+                        () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MyPetsPage())),
+                      ),
+                      Divider(height: 1, indent: 60, color: Colors.grey.shade100), 
+                      _buildMenuItem(
+                        context, 
+                        Icons.history, 
+                        "Riwayat Konsultasi",
+                        () => Navigator.push(context, MaterialPageRoute(builder: (context) => const HistoryScreen())),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  Text(_userName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF134E4A))),
-                  const SizedBox(height: 4),
-                  Text(_userEmail, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // --- MENU ---
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
-              ),
-              child: Column(
-                children: [
-                  _buildMenuItem(
-                    context, 
-                    Icons.person_outline, 
-                    "Informasi Pribadi",
-                    () async {
-                      await Navigator.push(context, MaterialPageRoute(builder: (context) => const PersonalInfoPage()));
-                      _loadUserData(); // Refresh data saat kembali
-                    },
-                  ),
-                  const Divider(height: 1, indent: 60),
-                  
-                  _buildMenuItem(
-                    context, 
-                    Icons.pets, 
-                    "Hewan Peliharaan",
-                    () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MyPetsPage())),
-                  ),
-                  const Divider(height: 1, indent: 1), 
-                  
-                  _buildMenuItem(
-                    context, 
-                    Icons.history, 
-                    "Riwayat Konsultasi",
-                    () => Navigator.push(context, MaterialPageRoute(builder: (context) => const HistoryScreen())),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // --- TOMBOL KELUAR ---
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: TextButton.icon(
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  foregroundColor: Colors.red,
-                  alignment: Alignment.centerLeft,
                 ),
-                onPressed: _logout,
-                icon: const Padding(padding: EdgeInsets.only(left: 20, right: 12), child: Icon(Icons.logout)),
-                label: const Text("Keluar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ),
-            ),
-          ],
+
+              const SizedBox(height: 24),
+
+              // --- TOMBOL KELUAR ---
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      foregroundColor: Colors.red,
+                    ),
+                    onPressed: _logout,
+                    icon: const Icon(Icons.logout),
+                    label: const Text("Keluar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildMenuItem(BuildContext context, IconData icon, String title, VoidCallback onTap) {
-    const primaryColor = Color(0xFF0F766E);
+    const primaryColor = Color(0xFF3C8085);
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       leading: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: const Color(0xFFCCFBF1),
+          color: primaryColor.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(icon, color: primaryColor, size: 22),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF334155))),
-      trailing: Icon(Icons.chevron_right, color: Colors.grey[400]),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
+      trailing: Icon(Icons.chevron_right, color: Colors.grey[300]),
       onTap: onTap,
     );
   }

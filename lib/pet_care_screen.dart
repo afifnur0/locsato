@@ -161,14 +161,14 @@ class _PetCareScreenState extends State<PetCareScreen> {
         children: [
           // HEADER
           Container(
-            padding: const EdgeInsets.fromLTRB(20, 50, 20, 30),
+            padding: const EdgeInsets.fromLTRB(16, 40, 16, 20),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [primaryColor, const Color(0xFF1a4042)],
+              gradient: const LinearGradient(
+                colors: [Color(0xFF2A5C5F), Color(0xFF3C8085)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
             ),
             child: Column(
               children: [
@@ -210,7 +210,7 @@ class _PetCareScreenState extends State<PetCareScreen> {
           // FILTER KATEGORI
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
                 _buildCategoryChip("Semua"),
@@ -238,7 +238,7 @@ class _PetCareScreenState extends State<PetCareScreen> {
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     itemCount: _articles.length,
                     itemBuilder: (context, index) => _buildArticleCard(_articles[index]),
                   ),

@@ -4,7 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'shop_screen.dart'; 
-import 'config.dart'; // <--- 1. WAJIB IMPORT FILE CONFIG INI
+import 'config.dart'; 
+import 'models.dart'; // <--- PERBAIKAN: Menambahkan import models.dart
 
 class CheckoutScreen extends StatefulWidget {
   final List<Map<String, dynamic>> cartItems;
@@ -26,8 +27,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   
   bool _isLoading = false;
 
-  // --- 2. PERUBAHAN UTAMA: AMBIL URL DARI CONFIG ---
-  // Tidak ada lagi hardcode IP disini. Semua terpusat di config.dart
   final String baseUrl = AppConfig.baseUrl; 
 
   String formatRupiah(int price) {
@@ -39,11 +38,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     setState(() { _isLoading = true; });
 
-    // 1. AMBIL TOKEN DARI PENYIMPANAN LOKAL
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? token = prefs.getString('token'); 
 
-    // Cek apakah user sudah login?
     if (token == null || token.isEmpty) {
       setState(() { _isLoading = false; });
       if (mounted) {
@@ -57,7 +54,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
-    // 2. SIAPKAN DATA BARANG SESUAI FORMAT DATABASE
     List<Map<String, dynamic>> itemsToSend = widget.cartItems.map((item) {
       Product p = item['product'];
       return {
@@ -70,13 +66,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     try {
       final url = Uri.parse('$baseUrl/api/checkout');
       
-      // 3. KIRIM KE SERVER DENGAN HEADER AUTHORIZATION
       final response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'Authorization': 'Bearer $token', // <--- WAJIB ADA
+          'Authorization': 'Bearer $token', 
         },
         body: jsonEncode({
           'nama_penerima': _namaController.text, 
@@ -87,24 +82,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         }),
       );
 
-      print("URL: $url"); // Debugging URL
+      print("URL: $url"); 
       print("Status Code: ${response.statusCode}");
       print("Response: ${response.body}");
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        // SUKSES
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Pesanan Berhasil Dibuat!"), backgroundColor: Colors.green),
           );
-          // Bersihkan navigasi dan kembali ke halaman utama
           Navigator.popUntil(context, (route) => route.isFirst);
         }
       } else if (response.statusCode == 401) {
-        // TOKEN EXPIRED / TIDAK VALID
         throw Exception("Sesi login habis atau IP berbeda. Silakan Logout dan Login kembali.");
       } else {
-        // ERROR LAIN DARI SERVER
         String errorMsg = "Gagal memproses pesanan.";
         try {
            var jsonResp = jsonDecode(response.body);

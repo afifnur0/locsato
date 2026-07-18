@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // Jangan lupa: flutter pub add intl
+import 'package:intl/intl.dart';
 import '../models.dart';
 import '../config.dart';
 
@@ -7,122 +7,176 @@ class ConsultationCard extends StatelessWidget {
   final ConsultationModel item;
   final Color primaryColor;
 
-  const ConsultationCard({super.key, required this.item, required this.primaryColor});
+  const ConsultationCard({
+    super.key,
+    required this.item,
+    required this.primaryColor,
+  });
+
+  String _getDoctorImageUrl(String? fotoPath, String namaDokter) {
+    if (fotoPath == null || fotoPath.isEmpty) {
+      return 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(namaDokter)}&background=random&color=fff';
+    }
+    String cleanPath = fotoPath;
+    if (cleanPath.startsWith('public/')) cleanPath = cleanPath.replaceFirst('public/', '');
+    if (cleanPath.startsWith('storage/')) cleanPath = cleanPath.replaceFirst('storage/', '');
+    if (cleanPath.startsWith('/')) cleanPath = cleanPath.substring(1);
+    return '${AppConfig.baseUrl}/storage/$cleanPath';
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Format Tanggal: "Minggu, 7 Des 2025"
-    String formattedDate = item.tanggal;
-    try {
-      final date = DateTime.parse(item.tanggal);
-      formattedDate = DateFormat('EEEE, d MMM y', 'id_ID').format(date); // Perlu locale Indonesia
-    } catch (e) {
-      formattedDate = item.tanggal;
-    }
-
-    // Warna Status
+    Color borderColor;
     Color statusColor;
-    Color statusBgColor;
-    String statusText = item.status.toUpperCase(); // DIJADWALKAN / SELESAI
+    String statusText;
+    IconData statusIcon;
 
-    if (item.status == 'selesai') {
-      statusColor = Colors.green;
-      statusBgColor = Colors.green.shade50;
-    } else if (item.status == 'dibatalkan') {
-      statusColor = Colors.red;
-      statusBgColor = Colors.red.shade50;
-    } else {
-      statusColor = Colors.orange;
-      statusBgColor = Colors.orange.shade50;
+    switch (item.status.toLowerCase()) {
+      case 'dijadwalkan':
+        borderColor = Colors.green; statusColor = Colors.green; statusText = "Terjadwal"; statusIcon = Icons.check_circle; break;
+      case 'menunggu_pembayaran':
+      case 'pending':
+        borderColor = Colors.orange; statusColor = Colors.orange; statusText = "Menunggu Bayar"; statusIcon = Icons.account_balance_wallet; break;
+      case 'proses':
+        borderColor = Colors.blue; statusColor = Colors.blue; statusText = "Sedang Chat"; statusIcon = Icons.chat; break;
+      case 'selesai':
+        borderColor = Colors.green; statusColor = Colors.green; statusText = "Selesai"; statusIcon = Icons.check_circle; break;
+      case 'menunggu_refund':
+        borderColor = Colors.orange; statusColor = Colors.orange; statusText = "Menunggu Refund"; statusIcon = Icons.access_time; break;
+      case 'refund_selesai':
+        borderColor = Colors.green; statusColor = Colors.green; statusText = "Refund Selesai"; statusIcon = Icons.check_circle; break;
+      default: // dibatalkan
+        borderColor = Colors.red; statusColor = Colors.red; statusText = "Dibatalkan"; statusIcon = Icons.cancel;
     }
+
+    bool isCancelled = item.status.toLowerCase() == 'dibatalkan';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, 4))],
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // HEADER: TANGGAL & STATUS
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Garis Warna Samping
+            Container(width: 5, decoration: BoxDecoration(color: borderColor, borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)))),
+            
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
-                    const SizedBox(width: 6),
-                    Text(formattedDate, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
+                    // Header: Info Dokter & Status
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(50),
+                          child: Image.network(
+                            _getDoctorImageUrl(item.dokter?.fotodokter ?? item.dokter?.foto, item.dokter?.nama ?? 'Dokter'),
+                            width: 50, height: 50, fit: BoxFit.cover,
+                            color: isCancelled ? Colors.grey : null,
+                            colorBlendMode: isCancelled ? BlendMode.saturation : null,
+                            errorBuilder: (ctx, err, stack) => Container(width: 50, height: 50, color: Colors.grey[200], child: const Icon(Icons.person, color: Colors.grey)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(item.dokter?.nama ?? 'Unknown', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, decoration: isCancelled ? TextDecoration.lineThrough : null)),
+                              const SizedBox(height: 4),
+                              Text(item.dokter?.spesialisasi ?? 'Umum', style: const TextStyle(color: Color(0xFF0F766E), fontSize: 12, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(color: statusColor.withOpacity(0.1), border: Border.all(color: statusColor.withOpacity(0.5)), borderRadius: BorderRadius.circular(20)),
+                          child: Row(
+                            children: [
+                              Icon(statusIcon, size: 12, color: statusColor),
+                              const SizedBox(width: 4),
+                              Text(statusText, style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        )
+                      ],
+                    ),
+                    const Divider(height: 24, color: Color(0xFFEEEEEE)),
+                    
+                    // Body: Info Jadwal & Hewan
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text("JADWAL KONSULTASI", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(Icons.calendar_month, size: 14, color: Color(0xFF0F766E)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    item.tanggalKonsultasi != '-' && item.tanggalKonsultasi.isNotEmpty 
+                                      ? DateFormat('dd MMM yyyy', 'id_ID').format(DateTime.tryParse(item.tanggalKonsultasi) ?? DateTime.now()) 
+                                      : '-', 
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text("PASIEN", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(Icons.pets, size: 14, color: Colors.orange),
+                                  const SizedBox(width: 4),
+                                  Text(item.hewan?.nama ?? 'Dihapus', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+                    
+                    // Catatan Box
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: Colors.grey.shade50, border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(8)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(item.catatanDokter != null ? "Catatan Dokter:" : "Keluhan:", style: TextStyle(color: item.catatanDokter != null ? Colors.green : Colors.grey.shade700, fontSize: 11, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 2),
+                          Text('"${item.catatanDokter ?? item.catatan ?? 'Tidak ada catatan'}"', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+                        ],
+                      ),
+                    )
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: statusBgColor, borderRadius: BorderRadius.circular(20)),
-                  child: Text(statusText, style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold)),
-                ),
-              ],
+              ),
             ),
-          ),
-          
-          const Divider(height: 24),
-
-          // ISI: DOKTER & KELUHAN
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Foto Dokter
-                CircleAvatar(
-                  radius: 28,
-                  backgroundImage: NetworkImage(
-                    item.fotoDokter != null 
-                      ? '${AppConfig.baseUrl}/storage/${item.fotoDokter}' 
-                      : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(item.namaDokter)}'
-                  ),
-                ),
-                const SizedBox(width: 16),
-                
-                // Detail
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("Dr. ${item.namaDokter}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                      const SizedBox(height: 4),
-                      Text("Pasien: ${item.namaHewan}", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                      const SizedBox(height: 8),
-                      
-                      // KELUHAN (Supaya user ingat ini konsultasi apa)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(8)),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("Keluhan:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: primaryColor)),
-                            const SizedBox(height: 2),
-                            Text(
-                              "\"${item.keluhan}\"", // Menampilkan catatan user (flu, mabok, dll)
-                              style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      )
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

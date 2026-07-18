@@ -135,15 +135,15 @@ class _BookingScreenState extends State<BookingScreen> {
   @override
   Widget build(BuildContext context) {
     const primaryColor = Color(0xFF3C8085);
-
+    
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7F6),
+      backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
-        title: const Text("Buat Janji Temu", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("Buat Janji Temu", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 18)),
         centerTitle: true,
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black87),
       ),
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator(color: primaryColor))
@@ -155,33 +155,42 @@ class _BookingScreenState extends State<BookingScreen> {
                 
                 // --- 1. KARTU DOKTER ---
                 Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10)],
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
                   ),
-                  child: Column(
+                  child: Row(
                     children: [
-                      CircleAvatar(
-                        radius: 40,
-                        backgroundImage: NetworkImage(
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.network(
                           widget.doctor.foto != null 
-                            // Pastikan URL gambar bersih dari 'public/' dan pakai AppConfig
                             ? '${AppConfig.baseUrl}/storage/${widget.doctor.foto!.replaceAll('public/', '')}' 
-                            : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(widget.doctor.nama)}'
+                            : 'https://ui-avatars.com/api/?name=${Uri.encodeComponent(widget.doctor.nama)}',
+                          width: 80, height: 80, fit: BoxFit.cover,
+                          errorBuilder: (ctx, err, stack) => Container(width: 80, height: 80, color: Colors.grey[100], child: const Icon(Icons.person, color: Colors.grey, size: 40)),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      Text("Dr. ${widget.doctor.nama}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                      Text(widget.doctor.spesialisasi, style: TextStyle(color: Colors.grey[600])),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                        decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(20)),
-                        child: Text(
-                          "Biaya: Rp ${widget.doctor.harga}", 
-                          style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text("Dr. ${widget.doctor.nama}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1E293B))),
+                            const SizedBox(height: 4),
+                            Text(widget.doctor.spesialisasi, style: TextStyle(color: primaryColor, fontSize: 14, fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(color: primaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                              child: Text(
+                                "Rp ${widget.doctor.harga}", 
+                                style: const TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 13)
+                              ),
+                            )
+                          ],
                         ),
                       )
                     ],
@@ -191,40 +200,44 @@ class _BookingScreenState extends State<BookingScreen> {
                 const SizedBox(height: 24),
 
                 // --- 2. PILIH JADWAL ---
-                const Text("1. Pilih Jadwal Praktik", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const Text("Pilih Jadwal Praktik", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1E293B))),
                 const SizedBox(height: 12),
                 _schedules.isEmpty 
                   ? Container(
-                      padding: const EdgeInsets.all(15),
-                      decoration: BoxDecoration(color: Colors.orange[50], borderRadius: BorderRadius.circular(10)),
-                      child: const Text("Dokter ini belum memiliki jadwal praktik.", style: TextStyle(color: Colors.orange)),
-                    )
-                  : GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 2.5,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.orange.shade200)),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                          SizedBox(width: 12),
+                          Expanded(child: Text("Dokter ini belum memiliki jadwal praktik yang tersedia.", style: TextStyle(color: Colors.orange, fontSize: 14))),
+                        ],
                       ),
-                      itemCount: _schedules.length,
-                      itemBuilder: (context, index) {
-                        final jadwal = _schedules[index];
-                        
-                        // FIX: Logic ID jadwal yang fleksibel
+                    )
+                  : Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: _schedules.map<Widget>((jadwal) {
                         final int scheduleId = jadwal['id'] ?? jadwal['id_jadwal']; 
                         final isSelected = _selectedScheduleId == scheduleId;
                         
                         return GestureDetector(
                           onTap: () => setState(() => _selectedScheduleId = scheduleId),
-                          child: Container(
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            width: (MediaQuery.of(context).size.width - 40 - 12) / 2, // 2 columns with spacing
+                            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
                             decoration: BoxDecoration(
                               color: isSelected ? primaryColor : Colors.white,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: isSelected ? [
+                                BoxShadow(color: primaryColor.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))
+                              ] : [
+                                BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 4, offset: const Offset(0, 2))
+                              ],
                               border: Border.all(
-                                color: isSelected ? primaryColor : Colors.grey.shade300, 
-                                width: isSelected ? 2 : 1
+                                color: isSelected ? primaryColor : Colors.grey.shade200, 
+                                width: 1
                               ),
                             ),
                             child: Column(
@@ -232,49 +245,55 @@ class _BookingScreenState extends State<BookingScreen> {
                               children: [
                                 Text(
                                   jadwal['hari'] ?? 'Hari', 
-                                  style: TextStyle(fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.black)
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isSelected ? Colors.white : const Color(0xFF1E293B))
                                 ),
+                                const SizedBox(height: 4),
                                 Text(
-                                  "${jadwal['jam_mulai']} - ${jadwal['jam_selesai']}", 
-                                  style: TextStyle(fontSize: 12, color: isSelected ? Colors.white70 : Colors.grey)
+                                  "${jadwal['jam_mulai'].toString().substring(0,5)} - ${jadwal['jam_selesai'].toString().substring(0,5)}", 
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: isSelected ? Colors.white.withOpacity(0.9) : Colors.grey.shade600)
                                 ),
                               ],
                             ),
                           ),
                         );
-                      },
+                      }).toList(),
                     ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 30),
 
                 // --- 3. DETAIL KONSULTASI ---
-                const Text("2. Detail Konsultasi", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const Text("Detail Konsultasi", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1E293B))),
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10)],
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Dropdown Hewan
-                      const Text("Pilih Pasien (Hewan)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+                      const Text("Hewan Peliharaan", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF1E293B))),
                       const SizedBox(height: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          border: Border.all(color: Colors.grey.shade200), 
+                          borderRadius: BorderRadius.circular(12)
+                        ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<int>(
                             value: _selectedPetId,
-                            hint: const Text("Pilih Hewan Peliharaan..."),
+                            hint: const Text("Pilih pasien hewan...", style: TextStyle(color: Colors.grey, fontSize: 14)),
                             isExpanded: true,
+                            icon: const Icon(Icons.keyboard_arrow_down, color: Colors.grey),
                             items: _myPets.map<DropdownMenuItem<int>>((pet) {
                               return DropdownMenuItem<int>(
-                                value: pet['id_hewan'] ?? pet['id'], // Handle beda nama kolom
-                                child: Text("${pet['nama']} (${pet['spesies']})"),
+                                value: pet['id_hewan'] ?? pet['id'],
+                                child: Text("${pet['nama']} (${pet['spesies']})", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                               );
                             }).toList(),
                             onChanged: (val) => setState(() => _selectedPetId = val),
@@ -282,41 +301,51 @@ class _BookingScreenState extends State<BookingScreen> {
                         ),
                       ),
                       
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
 
                       // Input Keluhan
-                      const Text("Keluhan / Catatan", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+                      const Text("Keluhan / Catatan", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF1E293B))),
                       const SizedBox(height: 8),
                       TextField(
                         controller: _noteController,
-                        maxLines: 3,
+                        maxLines: 4,
+                        style: const TextStyle(fontSize: 14),
                         decoration: InputDecoration(
-                          hintText: "Jelaskan gejala atau kondisi hewan...",
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+                          hintText: "Jelaskan gejala atau kondisi hewan peliharaan Anda...",
+                          hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+                          fillColor: Colors.grey.shade50,
+                          filled: true,
+                          contentPadding: const EdgeInsets.all(16),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF3C8085))),
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(height: 30),
+                const SizedBox(height: 40),
 
                 // --- TOMBOL SUBMIT ---
-                ElevatedButton(
-                  onPressed: (_isSubmitting || _schedules.isEmpty) 
-                    ? null 
-                    : _submitBooking,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                    elevation: 5,
+                SizedBox(
+                  height: 56, // Touch-friendly size (min 48px)
+                  child: ElevatedButton(
+                    onPressed: (_isSubmitting || _schedules.isEmpty) 
+                      ? null 
+                      : _submitBooking,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey.shade300,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: (_isSubmitting || _schedules.isEmpty) ? 0 : 4,
+                      shadowColor: primaryColor.withOpacity(0.4),
+                    ),
+                    child: _isSubmitting 
+                      ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                      : const Text("Buat Janji Temu", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   ),
-                  child: _isSubmitting 
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text("BUAT JANJI TEMU", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
                 const SizedBox(height: 20),
               ],

@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
-import 'package:flutter/foundation.dart'; // Wajib untuk deteksi Web/HP
-import 'checkout_screen.dart'; // Pastikan file ini ada
-import 'config.dart'; // <--- 1. WAJIB IMPORT FILE CONFIG INI
+import 'package:flutter/foundation.dart' hide Category; // <--- PERBAIKAN: Menyembunyikan Category bawaan Flutter
+import 'checkout_screen.dart'; 
+import 'shop_history_screen.dart'; 
+import 'config.dart'; 
+import 'models.dart';
 
 class ShopScreen extends StatefulWidget {
   const ShopScreen({super.key});
@@ -14,10 +16,12 @@ class ShopScreen extends StatefulWidget {
 }
 
 class _ShopScreenState extends State<ShopScreen> {
-  // --- 2. PERUBAHAN UTAMA: GUNAKAN CONFIG BASE URL ---
   final String baseUrl = AppConfig.baseUrl; 
 
-  final Color primaryColor = const Color(0xFF0F766E); // Sesuaikan warna dengan LocSato
+  final Color primaryColor = const Color(0xFF3C8085); 
+  final Color primaryLight = const Color(0xFFE8F5F5);
+  final Color textDark = const Color(0xFF2D3436);
+  final Color textMuted = const Color(0xFF636E72);
 
   // --- STATE DATA ---
   List<Product> products = [];
@@ -49,12 +53,8 @@ class _ShopScreenState extends State<ShopScreen> {
         final Map<String, dynamic> responseData = json.decode(response.body);
         final List<dynamic> productList = responseData['products'];
         
-        // Ambil kategori juga jika API menyediakan (opsional)
-        // final List<dynamic> catList = responseData['categories'] ?? [];
-        
         setState(() {
           products = productList.map((json) => Product.fromJson(json)).toList();
-          // categories = catList.map((json) => Category.fromJson(json)).toList();
           isLoading = false;
         });
       } else {
@@ -75,8 +75,6 @@ class _ShopScreenState extends State<ShopScreen> {
   }
 
   // --- LOGIC: CART FUNCTIONALITY ---
-
-  // 1. Tambah ke Keranjang
   void addToCart(Product product) {
     setState(() {
       int index = cartItems.indexWhere((item) => item['product'].id == product.id);
@@ -98,14 +96,12 @@ class _ShopScreenState extends State<ShopScreen> {
     );
   }
 
-  // 2. Hapus dari Keranjang
   void removeFromCart(int index) {
     setState(() {
       cartItems.removeAt(index);
     });
   }
 
-  // 3. Hitung Total Harga
   int calculateTotal() {
     int total = 0;
     for (var item in cartItems) {
@@ -119,16 +115,9 @@ class _ShopScreenState extends State<ShopScreen> {
   // --- HELPER FUNCTIONS ---
   String getImageUrl(String photo) {
     if (photo.isEmpty) return "https://placehold.co/400x300?text=No+Image";
-    
-    // Logika URL Gambar agar tidak double slash
     String cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
-    
-    // Jika foto sudah berisi path lengkap 'storage/...' atau 'produk_images/...'
     if (photo.startsWith('http')) return photo;
-    
-    // Perbaikan Path Gambar Laravel (Storage Link)
     if (photo.startsWith('produk_images') || photo.startsWith('storage')) {
-       // Hapus kata 'public/' jika tidak sengaja tersimpan di database
        String cleanPhotoPath = photo.replaceAll('public/', '');
        return "$cleanBaseUrl/storage/$cleanPhotoPath";
     } else {
@@ -143,36 +132,90 @@ class _ShopScreenState extends State<ShopScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: const Text("PetMedic Shop", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: primaryColor,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.receipt_long),
+            tooltip: 'Riwayat Pesanan',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ShopHistoryScreen(),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: isLoading 
           ? Center(child: CircularProgressIndicator(color: primaryColor))
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(),
-                _buildCategoryFilters(),
-                Expanded(child: _buildProductGrid()),
-              ],
+          : SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeroBanner(),
+                  _buildCategoryFilters(),
+                  _buildProductGrid(),
+                  const SizedBox(height: 80), 
+                ],
+              ),
             ),
       floatingActionButton: _buildFloatingCartButton(),
     );
   }
 
   // --- WIDGETS ---
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.all(20.0),
+
+  Widget _buildHeroBanner() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2A5C5F), Color(0xFF3C8085)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(color: primaryColor.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8))
+        ]
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Produk Kesehatan", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF2D3436))),
-          Text("Temukan obat & vitamin untuk anabul.", style: TextStyle(color: Colors.grey[600])),
+          const Text(
+            "Kebutuhan Terbaik\nuntuk Anabul Kesayangan", 
+            style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold, height: 1.3)
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            "Temukan makanan premium, mainan seru, dan perlengkapan kesehatan berkualitas tinggi hanya di LocSato Shop.", 
+            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4)
+          ),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(50),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text("Belanja Sekarang", style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(width: 5),
+                Icon(Icons.arrow_downward, color: primaryColor, size: 16),
+              ],
+            ),
+          )
         ],
       ),
     );
@@ -180,21 +223,24 @@ class _ShopScreenState extends State<ShopScreen> {
 
   Widget _buildCategoryFilters() {
     return Container(
-      height: 50,
-      margin: const EdgeInsets.only(bottom: 10),
+      height: 45,
+      margin: const EdgeInsets.only(bottom: 20),
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 15),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
-          _categoryButton('Semua', 'all'),
-          // Jika categories sudah diisi dari API, map disini
-          // ...categories.map((cat) => _categoryButton(cat.nama, cat.id.toString())).toList(),
+          _categoryButton('Semua', 'all', Icons.grid_view_outlined),
+          _categoryButton('Makanan', 'makanan', Icons.fastfood_outlined),
+          // <--- PERBAIKAN: Menggunakan Icons.medical_services_outlined
+          _categoryButton('Obat-obatan', 'obat', Icons.medical_services_outlined),
+          _categoryButton('Kandang', 'kandang', Icons.home_outlined),
+          _categoryButton('Mainan', 'mainan', Icons.sports_tennis_outlined),
         ],
       ),
     );
   }
 
-  Widget _categoryButton(String label, String id) {
+  Widget _categoryButton(String label, String id, IconData icon) {
     bool isActive = selectedCategory == id;
     return Padding(
       padding: const EdgeInsets.only(right: 10),
@@ -202,20 +248,30 @@ class _ShopScreenState extends State<ShopScreen> {
         onTap: () {
           setState(() {
             selectedCategory = id;
-            // Di sini nanti bisa tambah logika filter list produk lokal
-            // isLoading = true;
           });
-          // fetchData(); // Atau filter lokal saja tanpa request ulang
         },
+        borderRadius: BorderRadius.circular(50),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           decoration: BoxDecoration(
-            color: isActive ? primaryColor : Colors.transparent,
+            color: isActive ? primaryColor : Colors.white,
             borderRadius: BorderRadius.circular(50),
-            border: Border.all(color: primaryColor, width: 2),
+            border: Border.all(color: isActive ? primaryColor : Colors.grey.shade300, width: 1),
+            boxShadow: isActive ? [BoxShadow(color: primaryColor.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))] : [],
           ),
-          child: Center(
-            child: Text(label, style: TextStyle(color: isActive ? Colors.white : primaryColor, fontWeight: FontWeight.w600)),
+          child: Row(
+            children: [
+              Icon(icon, size: 16, color: isActive ? Colors.white : textMuted),
+              const SizedBox(width: 6),
+              Text(
+                label, 
+                style: TextStyle(
+                  color: isActive ? Colors.white : textMuted, 
+                  fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+                  fontSize: 13
+                )
+              ),
+            ],
           ),
         ),
       ),
@@ -223,31 +279,50 @@ class _ShopScreenState extends State<ShopScreen> {
   }
 
   Widget _buildProductGrid() {
-    if (products.isEmpty) {
+    // 1. TAMBAHKAN LOGIKA FILTER DI SINI
+    final filteredProducts = products.where((product) {
+      if (selectedCategory == 'all') return true;
+      // Mencocokkan teks kategori yang dipilih (makanan, obat, dll) dengan nama kategori dari API
+      return product.categoryName.toLowerCase().contains(selectedCategory.toLowerCase());
+    }).toList();
+
+    // 2. CEK LIST YANG SUDAH DI-FILTER, BUKAN LIST ASLI
+    if (filteredProducts.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.inventory_2_outlined, size: 60, color: Colors.grey[300]),
-            const SizedBox(height: 10),
-            const Text("Tidak ada produk tersedia", style: TextStyle(color: Colors.grey)),
-            TextButton(onPressed: fetchData, child: const Text("Coba Lagi"))
-          ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 50),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.search_off, size: 60, color: Colors.grey[300]),
+              const SizedBox(height: 10),
+              const Text("Kategori ini belum memiliki produk", style: TextStyle(color: Colors.grey)),
+              TextButton(
+                onPressed: () {
+                  setState(() => selectedCategory = 'all');
+                }, 
+                child: const Text("Tampilkan Semua")
+              )
+            ],
+          ),
         ),
       );
     }
 
     return GridView.builder(
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2, 
         childAspectRatio: 0.65, 
-        crossAxisSpacing: 15,
-        mainAxisSpacing: 15,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
       ),
-      itemCount: products.length,
+      // 3. GUNAKAN LIST YANG SUDAH DI-FILTER
+      itemCount: filteredProducts.length,
       itemBuilder: (context, index) {
-        final product = products[index];
+        final product = filteredProducts[index];
         return _buildProductCard(product);
       },
     );
@@ -259,56 +334,114 @@ class _ShopScreenState extends State<ShopScreen> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
-        border: Border.all(color: const Color(0xFFF0F0F0)),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 5))],
+        border: Border.all(color: Colors.grey.shade100),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Gambar Produk
           Expanded(
-            flex: 3,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: Image.network(
-                getImageUrl(product.photo),
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (ctx, err, stack) => Container(color: Colors.grey[200], child: const Center(child: Icon(Icons.image_not_supported, color: Colors.grey))),
+            flex: 4,
+            child: Container(
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF9F9F9),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                child: Image.network(
+                  getImageUrl(product.photo),
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (ctx, err, stack) => const Center(child: Icon(Icons.image_not_supported, color: Colors.grey)),
+                ),
               ),
             ),
           ),
+          
+          // Detail Produk
           Expanded(
-            flex: 4,
+            flex: 6,
             child: Padding(
-              padding: const EdgeInsets.all(10.0),
+              padding: const EdgeInsets.all(12.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (product.categoryName != 'Umum')
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: const Color(0xFFEEFCFC), borderRadius: BorderRadius.circular(8)),
-                      child: Text(product.categoryName, style: TextStyle(color: primaryColor, fontSize: 10, fontWeight: FontWeight.bold)),
-                    ),
-                  const SizedBox(height: 5),
-                  Text(product.nama, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  Text(product.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                  Text(
+                    product.categoryName.toUpperCase(), 
+                    style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    product.nama, 
+                    maxLines: 2, 
+                    overflow: TextOverflow.ellipsis, 
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textDark, height: 1.2)
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on_outlined, size: 12, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          product.klinikNama, 
+                          maxLines: 1, 
+                          overflow: TextOverflow.ellipsis, 
+                          style: const TextStyle(fontSize: 10, color: Colors.grey)
+                        ),
+                      ),
+                    ],
+                  ),
                   const Spacer(),
-                  Text(formatRupiah(product.price), style: TextStyle(color: primaryColor, fontWeight: FontWeight.w800, fontSize: 14)),
-                  Text("Stok: ${product.stock}", style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                  const SizedBox(height: 5),
+                  Text(
+                    formatRupiah(product.price), 
+                    style: TextStyle(color: primaryColor, fontWeight: FontWeight.w900, fontSize: 14)
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isOutOfStock ? const Color(0xFFFFEBEE) : primaryLight,
+                      borderRadius: BorderRadius.circular(50)
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(isOutOfStock ? Icons.cancel : Icons.check_circle, size: 10, color: isOutOfStock ? Colors.red : primaryColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          isOutOfStock ? "Stok Habis" : "Sisa Stok: ${product.stock}", 
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: isOutOfStock ? Colors.red : primaryColor)
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
+                    height: 36,
                     child: ElevatedButton(
                       onPressed: isOutOfStock ? null : () => addToCart(product),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(vertical: 0),
-                        disabledBackgroundColor: Colors.grey[300],
+                        backgroundColor: primaryLight,
+                        foregroundColor: primaryColor,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
+                        disabledBackgroundColor: Colors.grey[200],
+                        disabledForegroundColor: Colors.grey[500],
                       ),
-                      child: Text(isOutOfStock ? "Habis" : "Beli", style: const TextStyle(fontSize: 12, color: Colors.white)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(isOutOfStock ? Icons.block : Icons.shopping_bag_outlined, size: 14),
+                          const SizedBox(width: 5),
+                          Text(isOutOfStock ? "Habis" : "Tambah", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
                     ),
                   )
                 ],
@@ -332,42 +465,48 @@ class _ShopScreenState extends State<ShopScreen> {
           Positioned(
             right: 0, top: 0,
             child: Container(
-              padding: const EdgeInsets.all(5),
-              decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-              child: Text(cartItems.length.toString(), style: const TextStyle(color: Colors.white, fontSize: 10)),
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.red, 
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2)
+              ),
+              child: Text(cartItems.length.toString(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
             ),
           )
       ],
     );
   }
 
-  // --- MODAL KERANJANG (NAVIGASI KE CHECKOUT) ---
+  // --- MODAL KERANJANG ---
   void _showCartModal() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true, 
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      backgroundColor: Colors.transparent,
       builder: (context) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
             return Container(
               padding: const EdgeInsets.all(20),
-              height: MediaQuery.of(context).size.height * 0.8,
+              height: MediaQuery.of(context).size.height * 0.85,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(25))
+              ),
               child: Column(
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("Keranjang Belanja", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text("Keranjang Belanja", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primaryColor)),
                       IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
                     ],
                   ),
                   const Divider(),
-                  
-                  // LIST BELANJAAN
                   Expanded(
                     child: cartItems.isEmpty 
-                      ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.shopping_cart_outlined, size: 50, color: Colors.grey), Text("Keranjang Kosong", style: TextStyle(color: Colors.grey))]))
+                      ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.shopping_cart_outlined, size: 60, color: Colors.grey.shade300), const SizedBox(height: 10), const Text("Keranjang masih kosong", style: TextStyle(color: Colors.grey))]))
                       : ListView.builder(
                           itemCount: cartItems.length,
                           itemBuilder: (context, index) {
@@ -375,49 +514,65 @@ class _ShopScreenState extends State<ShopScreen> {
                             final Product p = item['product'];
                             final int qty = item['qty'];
 
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              child: ListTile(
-                                leading: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(getImageUrl(p.photo), width: 50, height: 50, fit: BoxFit.cover, errorBuilder: (c,e,s) => Container(width:50, height:50, color:Colors.grey)),
-                                ),
-                                title: Text(p.nama, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                subtitle: Text("${qty} x ${formatRupiah(p.price)}", style: TextStyle(color: primaryColor)),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () {
-                                    removeFromCart(index);
-                                    setModalState(() {}); 
-                                  },
-                                ),
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 15),
+                              padding: const EdgeInsets.only(bottom: 15),
+                              decoration: BoxDecoration(
+                                border: Border(bottom: BorderSide(color: Colors.grey.shade200))
                               ),
+                              child: Row(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Image.network(getImageUrl(p.photo), width: 60, height: 60, fit: BoxFit.cover, errorBuilder: (c,e,s) => Container(width:60, height:60, color:Colors.grey.shade200)),
+                                  ),
+                                  const SizedBox(width: 15),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(p.nama, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                        const SizedBox(height: 4),
+                                        Text("$qty x ${formatRupiah(p.price)}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                    onPressed: () {
+                                      removeFromCart(index);
+                                      setModalState(() {}); 
+                                    },
+                                  ),
+                                ],
+                              )
                             );
                           },
                         ),
                   ),
-
-                  // TOTAL HARGA & CHECKOUT
                   Container(
-                    padding: const EdgeInsets.all(15),
-                    decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(15)),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white, 
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, -5))]
+                    ),
                     child: Column(
                       children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text("Total Pembayaran:", style: TextStyle(fontWeight: FontWeight.bold)),
+                            const Text("Total:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                             Text(formatRupiah(calculateTotal()), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primaryColor)),
                           ],
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 15),
                         SizedBox(
                           width: double.infinity, 
+                          height: 50,
                           child: ElevatedButton(
                             onPressed: cartItems.isEmpty ? null : () {
-                              Navigator.pop(context); // Tutup modal dulu
-                              
-                              // Pindah ke Halaman Checkout membawa data belanjaan
+                              Navigator.pop(context); 
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -428,8 +583,11 @@ class _ShopScreenState extends State<ShopScreen> {
                                 ),
                               );
                             }, 
-                            style: ElevatedButton.styleFrom(backgroundColor: primaryColor, padding: const EdgeInsets.symmetric(vertical: 12)),
-                            child: const Text("Checkout Sekarang", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryColor, 
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50))
+                            ),
+                            child: const Text("Checkout Sekarang", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
                           )
                         )
                       ],
@@ -441,55 +599,6 @@ class _ShopScreenState extends State<ShopScreen> {
           }
         );
       },
-    );
-  }
-}
-
-// ==========================================
-// MODELS
-// ==========================================
-
-class Category {
-  final int id;
-  final String nama;
-  Category({required this.id, required this.nama});
-  factory Category.fromJson(Map<String, dynamic> json) {
-    return Category(id: json['id_kategori'] ?? 0, nama: json['nama_kategori'] ?? 'Kategori');
-  }
-}
-
-class Product {
-  final int id;
-  final String nama;
-  final String description;
-  final int price;
-  final int stock;
-  final String photo;
-  final String categoryName;
-
-  Product({
-    required this.id, required this.nama, required this.description, 
-    required this.price, required this.stock, required this.photo, required this.categoryName,
-  });
-
-  factory Product.fromJson(Map<String, dynamic> json) {
-    int parsePrice(dynamic value) {
-      if (value == null) return 0;
-      if (value is int) return value;
-      if (value is double) return value.toInt();
-      if (value is String) return double.tryParse(value)?.toInt() ?? 0;
-      return 0;
-    }
-
-    return Product(
-      id: json['id'],
-      nama: json['nama'] ?? 'Tanpa Nama', 
-      description: json['deskripsi'] ?? '-',
-      price: parsePrice(json['harga']),
-      stock: json['stok'] is String ? int.parse(json['stok']) : (json['stok'] ?? 0),
-      photo: json['foto'] ?? '',
-      categoryName: (json['kategori_produk'] != null && json['kategori_produk']['nama_kategori'] != null)
-          ? json['kategori_produk']['nama_kategori'] : 'Umum',
     );
   }
 }
